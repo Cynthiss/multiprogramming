@@ -112,4 +112,4 @@ verify: os
 	@echo "--- Símbolos clave del OS ---"
 	@$(NM) $(OS_ELF) | grep -E "scheduler_init|os_main|timer_irq_handler|saved_regs|saved_lr|saved_svc_sp" || true
 	@echo "--- Tamaños ---"
-	@$(SIZE) $(OS_ELF)
+	@$(SIZE) $(OS_ELF) 
