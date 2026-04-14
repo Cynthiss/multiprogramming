@@ -1,189 +1,115 @@
-# =============================================================================
-# Makefile — BeagleBone Black Multiprogramming OS
+# ==============================================================
+# Makefile — BeagleBone bare-metal multiprogramming
+# Autor : Dev B
+# Fase  : 1
+# ==============================================================
 #
-# Builds three independent images:
-#   OS/os.bin  — linked at 0x82000000
-#   P1/p1.bin  — linked at 0x82100000
-#   P2/p2.bin  — linked at 0x82200000
-#
-# Cross-compiler: arm-linux-gnueabihf-  (adjust CROSS if yours differs)
-# Install on Ubuntu/Debian:
-#   sudo apt-get install gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
-# =============================================================================
+# Targets:
+#   make        → compila solo el OS (Fase 1)
+#   make os     → compila solo el OS
+#   make p1     → aviso: deshabilitado en Fase 1
+#   make p2     → aviso: deshabilitado en Fase 1
+#   make clean  → elimina carpeta build/
+#   make verify → verifica símbolos del OS sin BeagleBone
+# ==============================================================
 
-CROSS   ?= arm-linux-gnueabihf-
-CC       = $(CROSS)gcc
-AS       = $(CROSS)as
-LD       = $(CROSS)ld
-OBJCOPY  = $(CROSS)objcopy
-OBJDUMP  = $(CROSS)objdump
-NM       = $(CROSS)nm
-SIZE     = $(CROSS)size
+# ---- Toolchain -----------------------------------------------
+CC      = arm-none-eabi-gcc
+LD      = arm-none-eabi-ld
+OBJCOPY = arm-none-eabi-objcopy
+NM      = arm-none-eabi-nm
+SIZE    = arm-none-eabi-size
 
-# Compiler flags
-CFLAGS   = -mcpu=cortex-a8 -marm \
-            -mfloat-abi=soft \
-            -ffreestanding -nostdlib -nostdinc \
-            -Wall -Wextra -O1 -g
+# ---- Flags ---------------------------------------------------
+CFLAGS  = -mcpu=cortex-a8 -marm        \
+          -mfloat-abi=soft             \
+          -ffreestanding -nostdlib     \
+          -fno-builtin                 \
+          -fno-stack-protector         \
+          -Wall -Wextra -O1 -g
 
-# Assembler flags
-ASFLAGS  = -mcpu=cortex-a8
+# ---- Directorios ---------------------------------------------
+OS_DIR  = OS
+LIB_DIR = lib
+BUILD   = build
 
-# Linker flags (no standard startup files or libraries)
-LDFLAGS  = -nostdlib --no-undefined
+# ---- Objetos del OS ------------------------------------------
+OS_OBJS = $(BUILD)/root.o          \
+          $(BUILD)/os.o            \
+          $(BUILD)/os_main.o       \
+          $(BUILD)/scheduler.o     \
+          $(BUILD)/lib_stdio.o     \
+          $(BUILD)/lib_string.o
 
-# =============================================================================
-# OS image
-# =============================================================================
-OS_SRCS  = OS/root.s OS/os.c
-OS_OBJS  = OS/root.o OS/os.o
-OS_LD    = OS/os.ld
-OS_ELF   = OS/os.elf
-OS_BIN   = OS/os.bin
-OS_LST   = OS/os.lst
-OS_MAP   = OS/os.map
+# ---- Outputs --------------------------------------------------
+OS_ELF  = $(BUILD)/os.elf
+OS_BIN  = $(BUILD)/os.bin
+OS_LST  = $(BUILD)/os.lst
+OS_MAP  = $(BUILD)/os.map
 
-# =============================================================================
-# P1 image — Dev C provides P1/main.c and lib/stdio.c, lib/string.c
-# =============================================================================
-P1_SRCS  = P1/main.c lib/stdio.c lib/string.c
-P1_OBJS  = P1/main.o lib/stdio.o lib/string.o
-P1_LD    = P1/p1.ld
-P1_ELF   = P1/p1.elf
-P1_BIN   = P1/p1.bin
+# ==============================================================
+.PHONY: all os p1 p2 clean verify
 
-# =============================================================================
-# P2 image — Dev C provides P2/main.c
-# =============================================================================
-P2_SRCS  = P2/main.c lib/stdio.c lib/string.c
-P2_OBJS  = P2/main.o lib/stdio.o lib/string.o
-P2_LD    = P2/p2.ld
-P2_ELF   = P2/p2.elf
-P2_BIN   = P2/p2.bin
-
-# =============================================================================
-# Default target
-# =============================================================================
-.PHONY: all clean os p1 p2 verify
-
-all: os p1 p2
+all: os
 	@echo ""
-	@echo "=== Build complete ==="
-	@$(SIZE) $(OS_ELF) $(P1_ELF) $(P2_ELF)
+	@echo "===== Build completo (Fase 1) ====="
+	@$(SIZE) $(OS_ELF)
 
-# =============================================================================
-# OS build rules
-# =============================================================================
+$(BUILD):
+	mkdir -p $(BUILD)
+
+# ==============================================================
+# OS
+# ==============================================================
 os: $(OS_BIN)
 
-OS/root.o: OS/root.s
-	$(CC) $(CFLAGS) -c $< -o $@
-
-OS/os.o: OS/os.c OS/os.h
-	$(CC) $(CFLAGS) -I OS -c $< -o $@
-
-$(OS_ELF): $(OS_OBJS) $(OS_LD)
-	$(LD) $(LDFLAGS) -T $(OS_LD) -Map=$(OS_MAP) -o $@ $(OS_OBJS)
+$(OS_ELF): $(OS_OBJS) $(OS_DIR)/os.ld
+	$(LD) -T $(OS_DIR)/os.ld -Map=$(OS_MAP) -o $@ $(OS_OBJS)
 
 $(OS_BIN): $(OS_ELF)
 	$(OBJCOPY) -O binary $< $@
-	$(OBJDUMP) -d $< > $(OS_LST)
-	@echo "[OS] Binary: $@ ($$(wc -c < $@) bytes)"
+	@echo "[OS] Listo: $@ ($$(wc -c < $@) bytes)"
+	@$(OBJDUMP) -d $< > $(OS_LST) 2>/dev/null || true
 
-# =============================================================================
-# P1 build rules
-# =============================================================================
-p1: $(P1_BIN)
+$(BUILD)/root.o: $(OS_DIR)/root.s | $(BUILD)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-P1/main.o: P1/main.c OS/os.h
-	$(CC) $(CFLAGS) -I OS -I lib -c $< -o $@
+$(BUILD)/os.o: $(OS_DIR)/os.c $(OS_DIR)/os.h $(OS_DIR)/pcb.h | $(BUILD)
+	$(CC) $(CFLAGS) -I$(OS_DIR) -I$(LIB_DIR) -c -o $@ $<
 
-lib/stdio.o: lib/stdio.c lib/stdio.h OS/os.h
-	$(CC) $(CFLAGS) -I OS -I lib -c $< -o $@
+$(BUILD)/os_main.o: $(OS_DIR)/os_main.c $(OS_DIR)/os.h $(OS_DIR)/scheduler.h | $(BUILD)
+	$(CC) $(CFLAGS) -I$(OS_DIR) -I$(LIB_DIR) -c -o $@ $<
 
-lib/string.o: lib/string.c lib/string.h
-	$(CC) $(CFLAGS) -I lib -c $< -o $@
+$(BUILD)/scheduler.o: $(OS_DIR)/scheduler.c $(OS_DIR)/scheduler.h $(OS_DIR)/os.h | $(BUILD)
+	$(CC) $(CFLAGS) -I$(OS_DIR) -I$(LIB_DIR) -c -o $@ $<
 
-$(P1_ELF): $(P1_OBJS) $(P1_LD)
-	$(LD) $(LDFLAGS) -T $(P1_LD) -o $@ $(P1_OBJS)
+$(BUILD)/lib_stdio.o: $(LIB_DIR)/stdio.c $(LIB_DIR)/stdio.h $(OS_DIR)/os.h | $(BUILD)
+	$(CC) $(CFLAGS) -I$(OS_DIR) -I$(LIB_DIR) -c -o $@ $<
 
-$(P1_BIN): $(P1_ELF)
-	$(OBJCOPY) -O binary $< $@
-	@echo "[P1] Binary: $@ ($$(wc -c < $@) bytes)"
+$(BUILD)/lib_string.o: $(LIB_DIR)/string.c $(LIB_DIR)/string.h | $(BUILD)
+	$(CC) $(CFLAGS) -I$(OS_DIR) -I$(LIB_DIR) -c -o $@ $<
 
-# =============================================================================
-# P2 build rules
-# =============================================================================
-p2: $(P2_BIN)
+# ==============================================================
+# P1 / P2 deshabilitados en Fase 1
+# ==============================================================
+p1:
+	@echo "P1 está deshabilitado en Fase 1."
 
-P2/main.o: P2/main.c OS/os.h
-	$(CC) $(CFLAGS) -I OS -I lib -c $< -o $@
+p2:
+	@echo "P2 está deshabilitado en Fase 1."
 
-$(P2_ELF): $(P2_OBJS) $(P2_LD)
-	$(LD) $(LDFLAGS) -T $(P2_LD) -o $@ $(P2_OBJS)
-
-$(P2_BIN): $(P2_ELF)
-	$(OBJCOPY) -O binary $< $@
-	@echo "[P2] Binary: $@ ($$(wc -c < $@) bytes)"
-
-# =============================================================================
-# Verification target — checks binary layout is correct
-# =============================================================================
-verify: all
-	@echo ""
-	@echo "=== Verifying memory map ==="
-	@$(NM) --numeric-sort $(OS_ELF) | grep -E "(_start|__bss|__os_stack|main)"
-	@echo "--- OS entry point (should be 0x82000000) ---"
-	@$(NM) $(OS_ELF) | grep "_start"
-	@echo "--- OS stack top (should be 0x82012000) ---"
-	@$(NM) $(OS_ELF) | grep "__os_stack_top"
-	@echo "--- P1 entry (should be 0x82100000) ---"
-	@$(NM) $(P1_ELF) | grep " main"
-	@echo "--- P2 entry (should be 0x82200000) ---"
-	@$(NM) $(P2_ELF) | grep " main"
-	@echo ""
-	@echo "=== Checking .bss symbols exist ==="
-	@$(NM) $(OS_ELF) | grep "__bss_start__" && echo "OK: __bss_start__" || echo "MISSING: __bss_start__"
-	@$(NM) $(OS_ELF) | grep "__bss_end__"   && echo "OK: __bss_end__"   || echo "MISSING: __bss_end__"
-	@echo ""
-	@echo "=== Checking saved_regs global (used by root.s) ==="
-	@$(NM) $(OS_ELF) | grep "saved_regs"  && echo "OK" || echo "MISSING: saved_regs"
-	@$(NM) $(OS_ELF) | grep "saved_lr"    && echo "OK" || echo "MISSING: saved_lr"
-	@$(NM) $(OS_ELF) | grep "saved_svc_sp" && echo "OK" || echo "MISSING: saved_svc_sp"
-	@echo ""
-	@echo "=== IRQ vector points to irq_handler ==="
-	@$(OBJDUMP) -d $(OS_ELF) | grep -A2 "82000018" || true
-	@echo ""
-	@echo "=== All checks done ==="
-
-# =============================================================================
-# Disassembly (useful for debugging)
-# =============================================================================
-disasm: all
-	$(OBJDUMP) -d $(OS_ELF) > OS/os_full.lst
-	$(OBJDUMP) -d $(P1_ELF) > P1/p1_full.lst
-	$(OBJDUMP) -d $(P2_ELF) > P2/p2_full.lst
-	@echo "Disassembly written to OS/os_full.lst, P1/p1_full.lst, P2/p2_full.lst"
-
-# =============================================================================
-# U-Boot load commands — print to screen for convenience
-# =============================================================================
-uboot:
-	@echo ""
-	@echo "=== U-Boot load commands ==="
-	@echo "Run these in the U-Boot console (serial terminal):"
-	@echo ""
-	@echo "  loady 0x82000000   # then send OS/os.bin via Ymodem"
-	@echo "  loady 0x82100000   # then send P1/p1.bin via Ymodem"
-	@echo "  loady 0x82200000   # then send P2/p2.bin via Ymodem"
-	@echo "  go    0x82000000   # start execution"
-	@echo ""
-
-# =============================================================================
+# ==============================================================
 # Clean
-# =============================================================================
+# ==============================================================
 clean:
-	rm -f $(OS_OBJS) $(OS_ELF) $(OS_BIN) $(OS_LST) $(OS_MAP)
-	rm -f $(P1_OBJS) $(P1_ELF) $(P1_BIN)
-	rm -f $(P2_OBJS) $(P2_ELF) $(P2_BIN)
-	@echo "Clean done."
+	rm -rf $(BUILD)
+	@echo "Build eliminado."
+
+# ==============================================================
+# Verify — sin necesidad de BeagleBone
+# ==============================================================
+verify: os
+	@echo "--- Símbolos clave del OS ---"
+	@$(NM) $(OS_ELF) | grep -E "scheduler_init|os_main|timer_irq_handler|saved_regs|saved_lr|saved_svc_sp" || true
+	@echo "--- Tamaños ---"
+	@$(SIZE) $(OS_ELF)
