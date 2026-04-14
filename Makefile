@@ -14,11 +14,27 @@
 # ==============================================================
 
 # ---- Toolchain -----------------------------------------------
+# macOS (Homebrew)
+#   brew install arm-none-eabi-gcc
 CC      = arm-none-eabi-gcc
 LD      = arm-none-eabi-ld
 OBJCOPY = arm-none-eabi-objcopy
+OBJDUMP = arm-none-eabi-objdump
 NM      = arm-none-eabi-nm
 SIZE    = arm-none-eabi-size
+
+# Linux (Ubuntu / Debian)
+#   sudo apt install gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+# CC      = arm-linux-gnueabihf-gcc
+# LD      = arm-linux-gnueabihf-ld
+# OBJCOPY = arm-linux-gnueabihf-objcopy
+# OBJDUMP = arm-linux-gnueabihf-objdump
+# NM      = arm-linux-gnueabihf-nm
+# SIZE    = arm-linux-gnueabihf-size
+
+# Windows
+#   Usar WSL (recomendado) y compilar con la misma configuración de Linux.
+#   No se recomienda compilar directo desde CMD o PowerShell.
 
 # ---- Flags ---------------------------------------------------
 CFLAGS  = -mcpu=cortex-a8 -marm        \
@@ -112,4 +128,4 @@ verify: os
 	@echo "--- Símbolos clave del OS ---"
 	@$(NM) $(OS_ELF) | grep -E "scheduler_init|os_main|timer_irq_handler|saved_regs|saved_lr|saved_svc_sp" || true
 	@echo "--- Tamaños ---"
-	@$(SIZE) $(OS_ELF) 
+	@$(SIZE) $(OS_ELF)
